@@ -9,7 +9,7 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #ffffff;
+            background-color: #f7f7f7;
             color: #1f2937;
         }
         .container {
@@ -19,7 +19,8 @@
         }
         .gantt-chart-container {
             display: flex;
-            gap: 2rem;
+            position: relative;
+            gap: 1rem;
             flex-wrap: nowrap;
             overflow-x: auto;
             padding-bottom: 1rem;
@@ -31,38 +32,39 @@
             position: relative;
         }
         .time-axis-column {
-            width: 100px; /* Fixed width for the time labels */
+            width: 100px;
         }
-        /* Adjusted height to perfectly align the time axis with the day header section */
-        .time-header-spacer {
-            height: 4rem;
+        .gantt-header-block {
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .day-column {
             background-color: #ffffff;
             border-radius: 1rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            padding: 1.5rem;
-            flex-grow: 1; /* Allow columns to grow */
-        }
-        .day-header {
-            text-align: center;
-            margin-bottom: 1rem;
+            flex-grow: 1;
+            padding: 0 1rem;
+            z-index: 10;
         }
         .day-title {
             font-size: 1.25rem;
             font-weight: 700;
             color: #1f2937;
+            text-align: center;
         }
         .timeline-container {
             position: relative;
             flex-grow: 1;
         }
-        .time-mark {
+        .timeline-gridline {
             position: absolute;
             left: 0;
             right: 0;
             height: 1px;
             background-color: #e5e7eb;
+            z-index: 5;
         }
         .time-label {
             position: absolute;
@@ -71,10 +73,12 @@
             font-size: 0.75rem;
             color: #6b7280;
             white-space: nowrap;
+            z-index: 6;
         }
         .event-bar {
             position: absolute;
             left: 0;
+            right: 0;
             border-radius: 0.5rem;
             display: flex;
             align-items: center;
@@ -88,6 +92,9 @@
             transition: all 0.1s ease-in-out;
             cursor: grab;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: calc(100% - 2rem); /* Account for padding */
+            margin-left: 1rem;
+            z-index: 11; /* Ensure events are in front of gridlines */
         }
         .event-bar:active {
             cursor: grabbing;
@@ -133,7 +140,7 @@
                 Print Calendar
             </button>
         </div>
-
+        
         <div id="calendar-container" class="gantt-chart-container">
             <!-- Daily columns will be generated here -->
         </div>
@@ -144,13 +151,13 @@
         const schedule = [
             {
                 day: 'Wednesday, October 8',
-                startHour: 8, // All days now start at 8 AM for a consistent axis
+                startHour: 16,
                 events: [
-                    { name: 'Settle In & Unpack', start: '8:00 AM', duration: 60, type: 'misc' },
-                    { name: 'Glen More II (Part 1)', start: '9:00 AM', duration: 90, type: 'game' },
-                    { name: 'Dinner', start: '10:30 AM', duration: 45, type: 'meal' },
-                    { name: 'Glen More II (Part 2)', start: '11:15 AM', duration: 60, type: 'game' },
-                    { name: 'Etherstone', start: '12:15 PM', duration: 120, type: 'game' },
+                    { name: 'Settle In & Unpack', start: '4:00 PM', duration: 60, type: 'misc' },
+                    { name: 'Glen More II (Part 1)', start: '5:00 PM', duration: 90, type: 'game' },
+                    { name: 'Dinner', start: '6:30 PM', duration: 45, type: 'meal' },
+                    { name: 'Glen More II (Part 2)', start: '7:15 PM', duration: 60, type: 'game' },
+                    { name: 'Etherstone', start: '8:15 PM', duration: 120, type: 'game' },
                 ]
             },
             {
@@ -222,7 +229,6 @@
             return `${displayHours}:${displayMinutes} ${period}`;
         }
         
-        // Drag and drop variables
         let isDragging = false;
         let draggedElement = null;
         let dragStartY = 0;
@@ -230,7 +236,10 @@
         let initialDayIndex = 0;
         let dayColumn = null;
         const scale = 0.9;
-        let globalStartMinutes = 0;
+        const TIME_START_HOUR = 8;
+        const TIME_END_HOUR = 23; // 11 PM
+        const GLOBAL_MIN_MINUTES = TIME_START_HOUR * 60;
+        const GLOBAL_MAX_MINUTES = TIME_END_HOUR * 60;
         let snapToGridEnabled = true;
         let snapToEventsEnabled = false;
         let dragOffsetY = 0;
@@ -252,7 +261,6 @@
         });
 
         document.addEventListener('mousemove', (e) => {
-            // Added check to prevent errors when no element is being dragged
             if (!isDragging || !draggedElement) return;
 
             const dy = e.clientY - dragStartY;
@@ -265,12 +273,10 @@
                 newTop = Math.max(0, Math.min(newTop, timelineHeight - eventHeight));
             }
             
-
             draggedElement.style.top = `${newTop}px`;
         });
 
         document.addEventListener('mouseup', (e) => {
-            // Added check to prevent errors when no element is being dragged
             if (!isDragging || !draggedElement) return;
 
             isDragging = false;
@@ -283,15 +289,13 @@
                 const newDayIndex = parseInt(newDayColumn.dataset.dayIndex, 10);
                 const eventIndex = parseInt(draggedElement.dataset.eventIndex, 10);
 
-                // Get the dragged event from the original day's schedule
                 const eventToMove = schedule[initialDayIndex].events.splice(eventIndex, 1)[0];
 
-                // Calculate the new start time
                 const newTimeline = newDayColumn.querySelector('.timeline-container');
                 const timelineRect = newTimeline.getBoundingClientRect();
                 const newTopInPx = (e.clientY - timelineRect.top) - dragOffsetY;
                 
-                let newStartMinutes = (newTopInPx / scale) + globalStartMinutes;
+                let newStartMinutes = (newTopInPx / scale) + GLOBAL_MIN_MINUTES;
                 
                 let finalMinutes = newStartMinutes;
                 
@@ -307,7 +311,6 @@
                         const otherStartMinutes = timeToMinutes(otherEvent.start);
                         const otherEndMinutes = otherStartMinutes + otherEvent.duration;
 
-                        // Rule 1: Snap top of dragged event to bottom of another event (within 15 minutes)
                         const snapToBottomThreshold = 15;
                         if (Math.abs(newStartMinutes - otherEndMinutes) <= snapToBottomThreshold) {
                             finalMinutes = otherEndMinutes;
@@ -315,7 +318,6 @@
                             break;
                         }
 
-                        // Rule 2: Snap bottom of dragged event to top of another event (within 5 minutes)
                         const snapToTopThreshold = 5;
                         if (Math.abs(newEndMinutes - otherStartMinutes) <= snapToTopThreshold) {
                             finalMinutes = otherStartMinutes - draggedEventDuration;
@@ -324,20 +326,16 @@
                         }
                     }
                 } else {
-                    // Round to the nearest minute when no snapping is enabled
                     finalMinutes = Math.round(newStartMinutes);
                 }
 
                 eventToMove.start = minutesToTime(finalMinutes);
                 
-                // Add the event to the new day's schedule
                 schedule[newDayIndex].events.push(eventToMove);
 
-                // Sort the new day's events by start time
                 schedule[newDayIndex].events.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
             }
 
-            // Re-render the calendar
             renderAllDays();
 
             draggedElement = null;
@@ -345,124 +343,89 @@
             dragOffsetY = 0;
         });
 
-        function calculateGlobalTimeline() {
-            let minStartMinutes = Infinity;
-            let maxEndMinutes = -Infinity;
-
-            schedule.forEach(dayData => {
-                const dayStartMinutes = dayData.startHour * 60;
-                if (dayStartMinutes < minStartMinutes) {
-                    minStartMinutes = dayStartMinutes;
-                }
-                dayData.events.forEach(event => {
-                    const eventEndMinutes = timeToMinutes(event.start) + event.duration;
-                    if (eventEndMinutes > maxEndMinutes) {
-                        maxEndMinutes = eventEndMinutes;
-                    }
-                });
-            });
-
-            return { minStartMinutes, maxEndMinutes };
-        }
-
-        function createTimeAxis(startMinutes, endMinutes) {
+        function createTimeAxis() {
             const timeAxis = document.createElement('div');
             timeAxis.className = 'time-axis-column';
-
-            const totalDuration = endMinutes - startMinutes;
+            
+            const totalDuration = GLOBAL_MAX_MINUTES - GLOBAL_MIN_MINUTES;
             const timelineHeight = totalDuration * scale;
             
-            let html = '<div class="time-header-spacer"></div>';
-            const startHour = Math.floor(startMinutes / 60);
-            const endHour = Math.ceil(endMinutes / 60);
-
-            for (let i = startHour; i <= endHour; i++) {
+            let timelineContent = '';
+            for (let i = TIME_START_HOUR; i <= TIME_END_HOUR; i++) {
                 const hour = i;
-                const topPosition = ((hour * 60) - startMinutes) * scale;
+                const topPosition = ((hour * 60) - GLOBAL_MIN_MINUTES) * scale;
                 const displayTime = `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
                 
-                if (topPosition >= 0) {
-                    html += `
-                        <span class="time-label" style="top: ${topPosition}px;">${displayTime}</span>
-                    `;
-                }
+                timelineContent += `
+                    <span class="time-label" style="top: ${topPosition}px;">${displayTime}</span>
+                `;
             }
-            timeAxis.innerHTML = html;
+
+            timeAxis.innerHTML = `
+                <div class="gantt-header-block"></div>
+                <div class="timeline-container relative" style="height: ${timelineHeight}px;">
+                    ${timelineContent}
+                </div>
+            `;
             return timeAxis;
         }
-
-        function createDayChart(dayData, maxBarWidth, dayIndex, globalStartMinutes, globalEndMinutes) {
+        
+        function createDayChart(dayData, dayIndex) {
             const dayColumn = document.createElement('div');
             dayColumn.className = 'day-column';
             dayColumn.dataset.dayIndex = dayIndex;
 
-            const totalDuration = globalEndMinutes - globalStartMinutes;
+            const totalDuration = GLOBAL_MAX_MINUTES - GLOBAL_MIN_MINUTES;
             const timelineHeight = totalDuration * scale;
 
+            // Generate gridlines for this day
+            let gridlinesHtml = '';
+            for (let i = TIME_START_HOUR; i <= TIME_END_HOUR; i++) {
+                const hour = i;
+                const topPosition = ((hour * 60) - GLOBAL_MIN_MINUTES) * scale;
+                gridlinesHtml += `<div class="timeline-gridline" style="top: ${topPosition}px;"></div>`;
+            }
+
+            // Generate events
             const eventsHtml = dayData.events.map((event, eventIndex) => {
                 const startTimeMinutes = timeToMinutes(event.start);
-                const topPosition = (startTimeMinutes - globalStartMinutes) * scale;
+                const topPosition = (startTimeMinutes - GLOBAL_MIN_MINUTES) * scale;
                 const height = event.duration * scale;
-                
-                return `
-                    <div class="event-bar ${event.type}-event" 
-                         style="top: ${topPosition}px; height: ${height}px; width: ${maxBarWidth}px;"
-                         data-event-index="${eventIndex}">
-                        <span>${event.name}</span>
-                    </div>
-                `;
-            }).join('');
 
+                if (startTimeMinutes >= GLOBAL_MIN_MINUTES && startTimeMinutes <= GLOBAL_MAX_MINUTES) {
+                     return `
+                        <div class="event-bar ${event.type}-event" 
+                            style="top: ${topPosition}px; height: ${height}px;"
+                            data-event-index="${eventIndex}">
+                            <span>${event.name}</span>
+                        </div>
+                    `;
+                }
+                return '';
+            }).join('');
+            
             dayColumn.innerHTML = `
-                <div class="day-header">
+                <div class="gantt-header-block">
                     <h2 class="day-title">${dayData.day}</h2>
                 </div>
-                <div class="timeline-container" style="height: ${timelineHeight}px; width: ${maxBarWidth + 40}px;">
+                <div class="timeline-container" style="height: ${timelineHeight}px;">
+                    ${gridlinesHtml}
                     ${eventsHtml}
                 </div>
             `;
             return dayColumn;
-        }
-
-        function calculateMaxBarWidth(schedule) {
-            const tempDiv = document.createElement('div');
-            tempDiv.style.position = 'absolute';
-            tempDiv.style.visibility = 'hidden';
-            tempDiv.style.whiteSpace = 'nowrap';
-            tempDiv.style.fontFamily = 'Inter, sans-serif';
-            tempDiv.style.fontSize = '0.75rem';
-            tempDiv.style.padding = '0.5rem 0.25rem';
-            document.body.appendChild(tempDiv);
-            
-            let maxWidth = 0;
-            schedule.forEach(dayData => {
-                dayData.events.forEach(event => {
-                    tempDiv.textContent = event.name;
-                    const textWidth = tempDiv.getBoundingClientRect().width;
-                    if (textWidth > maxWidth) {
-                        maxWidth = textWidth;
-                    }
-                });
-            });
-            document.body.removeChild(tempDiv);
-            return maxWidth + 10;
         }
         
         function renderAllDays() {
             const scrollY = window.scrollY;
             const calendarContainer = document.getElementById('calendar-container');
             calendarContainer.innerHTML = '';
-
-            const { minStartMinutes, maxEndMinutes } = calculateGlobalTimeline();
-            globalStartMinutes = minStartMinutes;
             
-            const timeAxis = createTimeAxis(minStartMinutes, maxEndMinutes);
+            const timeAxis = createTimeAxis();
             calendarContainer.appendChild(timeAxis);
-
-            const maxBarWidth = calculateMaxBarWidth(schedule);
             
             schedule.forEach((dayData, dayIndex) => {
-                const chart = createDayChart(dayData, maxBarWidth, dayIndex, minStartMinutes, maxEndMinutes);
+                const chart = createDayChart(dayData, dayIndex);
                 calendarContainer.appendChild(chart);
             });
 
@@ -472,10 +435,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderAllDays();
 
-            // Set up toggle event listeners
             document.getElementById('snapToGridToggle').addEventListener('change', (e) => {
                 snapToGridEnabled = e.target.checked;
-                // If snap to events is enabled, disable it when grid is toggled on
                 if (snapToGridEnabled && snapToEventsEnabled) {
                     snapToEventsEnabled = false;
                     document.getElementById('snapToEventsToggle').checked = false;
@@ -484,7 +445,6 @@
 
             document.getElementById('snapToEventsToggle').addEventListener('change', (e) => {
                 snapToEventsEnabled = e.target.checked;
-                // If snap to grid is enabled, disable it when events are toggled on
                 if (snapToEventsEnabled && snapToGridEnabled) {
                     snapToGridEnabled = false;
                     document.getElementById('snapToGridToggle').checked = false;
