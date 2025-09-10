@@ -135,10 +135,14 @@
                     <label for="snapToEventsToggle" class="text-sm font-medium text-gray-700">Snap to Events</label>
                 </div>
             </div>
-
-            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
-                Print Calendar
-            </button>
+            <div class="flex justify-center space-x-4">
+                <button id="undoButton" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105" disabled>
+                    Undo
+                </button>
+                <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                    Print Calendar
+                </button>
+            </div>
         </div>
         
         <div id="calendar-container" class="gantt-chart-container">
@@ -210,6 +214,44 @@
                 ]
             }
         ];
+
+        let history = [];
+        const maxHistorySize = 3;
+
+        function saveState() {
+            // Create a deep copy to avoid modifying the same object reference
+            const currentState = JSON.parse(JSON.stringify(schedule));
+            history.push(currentState);
+            // Keep the history size limited to maxHistorySize + 1 (for the initial state)
+            if (history.length > maxHistorySize + 1) {
+                history.shift();
+            }
+            updateUndoButtonState();
+        }
+
+        function undoLastChange() {
+            if (history.length > 1) {
+                // Remove the current state, and the previous state will be at the end of the array
+                history.pop();
+                const previousState = history[history.length - 1];
+                // Update the schedule with the previous state
+                schedule.splice(0, schedule.length, ...JSON.parse(JSON.stringify(previousState)));
+                renderAllDays();
+                updateUndoButtonState();
+            }
+        }
+
+        function updateUndoButtonState() {
+            const undoButton = document.getElementById('undoButton');
+            if (undoButton) {
+                // The button should be disabled if there's only one state (the initial one)
+                undoButton.disabled = history.length <= 1;
+                undoButton.classList.toggle('bg-gray-400', history.length <= 1);
+                undoButton.classList.toggle('bg-indigo-600', history.length > 1);
+                undoButton.classList.toggle('hover:bg-gray-500', history.length <= 1);
+                undoButton.classList.toggle('hover:bg-indigo-700', history.length > 1);
+            }
+        }
 
         function timeToMinutes(timeStr) {
             if (!timeStr) return 0;
@@ -337,6 +379,7 @@
             }
 
             renderAllDays();
+            saveState();
 
             draggedElement = null;
             dayColumn = null;
@@ -434,6 +477,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             renderAllDays();
+            saveState(); // Save the initial state
 
             document.getElementById('snapToGridToggle').addEventListener('change', (e) => {
                 snapToGridEnabled = e.target.checked;
@@ -450,6 +494,8 @@
                     document.getElementById('snapToGridToggle').checked = false;
                 }
             });
+            
+            document.getElementById('undoButton').addEventListener('click', undoLastChange);
         });
     </script>
 </body>
