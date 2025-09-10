@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Board Game Weekend Gantt Chart</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 2rem;
+        }
+        .gantt-chart-container {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 1rem;
+        }
+        .time-axis-column, .day-column {
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .time-axis-column {
+            width: 100px; /* Fixed width for the time labels */
+        }
+        .time-header-spacer {
+            height: 3.5rem; /* Matches the day header height */
+        }
+        .day-column {
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            flex-grow: 1; /* Allow columns to grow */
+        }
+        .day-header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .day-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .timeline-container {
+            position: relative;
+            flex-grow: 1;
+        }
+        .time-mark {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background-color: #e5e7eb;
+        }
+        .time-label {
+            position: absolute;
+            right: 0.5rem;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+        .event-bar {
+            position: absolute;
+            left: 0;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: #1f2937;
+            padding: 0.5rem 0.25rem;
+            text-align: center;
+            word-wrap: break-word;
+            overflow: hidden;
+            transition: all 0.1s ease-in-out;
+            cursor: grab;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .event-bar:active {
+            cursor: grabbing;
+        }
+        .game-event { background-color: #f0fdf4; border: 1px solid #4ade80; }
+        .meal-event { background-color: #fffbeb; border: 1px solid #facc15; }
+        .misc-event { background-color: #eef2ff; border: 1px solid #818cf8; }
+
+        /* Print styles */
+        @media print {
+            body { background-color: #ffffff; color: #000000; }
+            .no-print { display: none; }
+            .container { padding: 0; }
+            .day-column { box-shadow: none; border: none; }
+            .event-bar { box-shadow: none; border: 1px solid #e5e7eb !important; transform: none; }
+            .gantt-chart-container {
+                display: block;
+                page-break-after: always;
+            }
+            .day-column {
+                width: 100%;
+                margin-bottom: 2rem;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container">
+        <div class="no-print text-center py-8">
+            <div class="flex justify-center items-center space-x-4 mb-6">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="snapToGridToggle" class="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out rounded focus:ring-indigo-500" checked>
+                    <label for="snapToGridToggle" class="text-sm font-medium text-gray-700">Snap to Grid (15 min)</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="snapToEventsToggle" class="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out rounded focus:ring-indigo-500">
+                    <label for="snapToEventsToggle" class="text-sm font-medium text-gray-700">Snap to Events</label>
+                </div>
+            </div>
+
+            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                Print Calendar
+            </button>
+        </div>
+
+        <div id="calendar-container" class="gantt-chart-container">
+            <!-- Daily columns will be generated here -->
+        </div>
+    </div>
+
+    <script>
+        // The schedule data, with start and duration
+        const schedule = [
+            {
+                day: 'Wednesday, October 8',
+                startHour: 16, // 4 PM
+                events: [
+                    { name: 'Settle In & Unpack', start: '4:00 PM', duration: 60, type: 'misc' },
+                    { name: 'Glen More II (Part 1)', start: '5:00 PM', duration: 90, type: 'game' },
+                    { name: 'Dinner', start: '6:30 PM', duration: 45, type: 'meal' },
+                    { name: 'Glen More II (Part 2)', start: '7:15 PM', duration: 60, type: 'game' },
+                    { name: 'Etherstone', start: '8:15 PM', duration: 120, type: 'game' },
+                ]
+            },
+            {
+                day: 'Thursday, October 9',
+                startHour: 8,
+                events: [
+                    { name: 'Darwin\'s Journey', start: '8:00 AM', duration: 180, type: 'game' },
+                    { name: 'Village', start: '11:00 AM', duration: 72, type: 'game' },
+                    { name: 'Lunch', start: '1:00 PM', duration: 45, type: 'meal' },
+                    { name: 'Wondrous Creatures', start: '1:45 PM', duration: 90, type: 'game' },
+                    { name: 'Rats of Wistar', start: '3:15 PM', duration: 114, type: 'game' },
+                    { name: 'Formosa Tea', start: '5:03 PM', duration: 102, type: 'game' },
+                    { name: 'Dinner', start: '6:45 PM', duration: 45, type: 'meal' },
+                    { name: 'Grand Austria Hotel', start: '7:30 PM', duration: 138, type: 'game' },
+                ]
+            },
+            {
+                day: 'Friday, October 10',
+                startHour: 8,
+                events: [
+                    { name: 'Galactic Renaissance', start: '8:00 AM', duration: 180, type: 'game' },
+                    { name: 'Black Forest', start: '11:00 AM', duration: 180, type: 'game' },
+                    { name: 'Lunch', start: '2:00 PM', duration: 45, type: 'meal' },
+                    { name: 'Pillars of Heracles', start: '2:45 PM', duration: 180, type: 'game' },
+                    { name: 'Windmill Valley', start: '5:45 PM', duration: 102, type: 'game' },
+                    { name: 'Dinner', start: '7:27 PM', duration: 45, type: 'meal' },
+                    { name: 'Bitoku', start: '8:12 PM', duration: 138, type: 'game' },
+                    { name: 'Rebirth', start: '10:30 PM', duration: 72, type: 'game' }
+                ]
+            },
+            {
+                day: 'Saturday, October 11',
+                startHour: 8,
+                events: [
+                    { name: 'Trailblazer: The Arizona Trail', start: '8:00 AM', duration: 186, type: 'game' },
+                    { name: 'Vantage', start: '11:06 AM', duration: 138, type: 'game' },
+                    { name: 'Lunch', start: '1:24 PM', duration: 45, type: 'meal' },
+                    { name: 'Apiary', start: '2:09 PM', duration: 102, type: 'game' },
+                    { name: 'Alpujarras', start: '3:51 PM', duration: 102, type: 'game' },
+                    { name: 'Dinner', start: '6:45 PM', duration: 45, type: 'meal' },
+                    { name: 'Arcs', start: '7:30 PM', duration: 138, type: 'game' }
+                ]
+            },
+            {
+                day: 'Sunday, October 12',
+                startHour: 8,
+                events: [
+                    { name: 'Creature Caravan', start: '8:00 AM', duration: 102, type: 'game' },
+                    { name: 'Pack up & Check-out', start: '9:42 AM', duration: 78, type: 'misc' },
+                ]
+            }
+        ];
+
+        function timeToMinutes(timeStr) {
+            if (!timeStr) return 0;
+            const [time, period] = timeStr.split(' ');
+            let [hours, minutes] = time.split(':').map(Number);
+            if (period === 'PM' && hours !== 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+            return hours * 60 + minutes;
+        }
+
+        function minutesToTime(totalMinutes) {
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours % 12 === 0 ? 12 : hours % 12;
+            const displayMinutes = minutes < 10 ? '0' + minutes : minutes;
+            return `${displayHours}:${displayMinutes} ${period}`;
+        }
+
+        // Drag and drop variables
+        let isDragging = false;
+        let draggedElement = null;
+        let dragStartY = 0;
+        let initialTop = 0;
+        let initialDayIndex = 0;
+        let dayColumn = null;
+        const scale = 0.9;
+        let globalStartMinutes = 0;
+        let snapToGridEnabled = true;
+        let snapToEventsEnabled = false;
+        let dragOffsetY = 0;
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.event-bar')) {
+                draggedElement = e.target.closest('.event-bar');
+                isDragging = true;
+                dragStartY = e.clientY;
+                initialTop = draggedElement.offsetTop;
+                dayColumn = draggedElement.closest('.day-column');
+                initialDayIndex = parseInt(dayColumn.dataset.dayIndex, 10);
+
+                dragOffsetY = e.clientY - draggedElement.getBoundingClientRect().top;
+
+                draggedElement.style.transition = 'none';
+                draggedElement.style.zIndex = '100';
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const dy = e.clientY - dragStartY;
+            let newTop = initialTop + dy;
+
+            const timeline = dayColumn.querySelector('.timeline-container');
+            if (timeline) {
+                const timelineHeight = timeline.offsetHeight;
+                const eventHeight = draggedElement.offsetHeight;
+                newTop = Math.max(0, Math.min(newTop, timelineHeight - eventHeight));
+            }
+
+
+            draggedElement.style.top = `${newTop}px`;
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+
+            isDragging = false;
+            draggedElement.style.transition = 'all 0.3s ease-in-out';
+            draggedElement.style.zIndex = 'auto';
+
+            const newDayColumn = document.elementFromPoint(e.clientX, e.clientY).closest('.day-column');
+
+            if (newDayColumn) {
+                const newDayIndex = parseInt(newDayColumn.dataset.dayIndex, 10);
+                const eventIndex = parseInt(draggedElement.dataset.eventIndex, 10);
+
+                // Get the dragged event from the original day's schedule
+                const eventToMove = schedule[initialDayIndex].events.splice(eventIndex, 1)[0];
+
+                // Calculate the new start time
+                const newTimeline = newDayColumn.querySelector('.timeline-container');
+                const timelineRect = newTimeline.getBoundingClientRect();
+                const newTopInPx = (e.clientY - timelineRect.top) - dragOffsetY;
+
+                let newStartMinutes = (newTopInPx / scale) + globalStartMinutes;
+
+                let finalMinutes = newStartMinutes;
+
+                if (snapToGridEnabled) {
+                    finalMinutes = Math.round(newStartMinutes / 15) * 15;
+                } else if (snapToEventsEnabled) {
+                    const draggedEventDuration = eventToMove.duration;
+                    const newEndMinutes = newStartMinutes + draggedEventDuration;
+                    const otherEvents = schedule[newDayIndex].events;
+                    let foundSnap = false;
+
+                    for (const otherEvent of otherEvents) {
+                        const otherStartMinutes = timeToMinutes(otherEvent.start);
+                        const otherEndMinutes = otherStartMinutes + otherEvent.duration;
+
+                        // Rule 1: Snap top of dragged event to bottom of another event (within 15 minutes)
+                        const snapToBottomThreshold = 15;
+                        if (Math.abs(newStartMinutes - otherEndMinutes) <= snapToBottomThreshold) {
+                            finalMinutes = otherEndMinutes;
+                            foundSnap = true;
+                            break;
+                        }
+
+                        // Rule 2: Snap bottom of dragged event to top of another event (within 5 minutes)
+                        const snapToTopThreshold = 5;
+                        if (Math.abs(newEndMinutes - otherStartMinutes) <= snapToTopThreshold) {
+                            finalMinutes = otherStartMinutes - draggedEventDuration;
+                            foundSnap = true;
+                            break;
+                        }
+                    }
+                } else {
+                    // Round to the nearest minute when no snapping is enabled
+                    finalMinutes = Math.round(newStartMinutes);
+                }
+
+                eventToMove.start = minutesToTime(finalMinutes);
+
+                // Add the event to the new day's schedule
+                schedule[newDayIndex].events.push(eventToMove);
+
+                // Sort the new day's events by start time
+                schedule[newDayIndex].events.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+            }
+
+            // Re-render the calendar
+            renderAllDays();
+
+            draggedElement = null;
+            dayColumn = null;
+            dragOffsetY = 0;
+        });
+
+        function calculateGlobalTimeline() {
+            let minStartMinutes = Infinity;
+            let maxEndMinutes = -Infinity;
+
+            schedule.forEach(dayData => {
+                const dayStartMinutes = dayData.startHour * 60;
+                if (dayStartMinutes < minStartMinutes) {
+                    minStartMinutes = dayStartMinutes;
+                }
+                dayData.events.forEach(event => {
+                    const eventEndMinutes = timeToMinutes(event.start) + event.duration;
+                    if (eventEndMinutes > maxEndMinutes) {
+                        maxEndMinutes = eventEndMinutes;
+                    }
+                });
+            });
+
+            return { minStartMinutes, maxEndMinutes };
+        }
+
+        function createTimeAxis(startMinutes, endMinutes) {
+            const timeAxis = document.createElement('div');
+            timeAxis.className = 'time-axis-column';
+
+            const totalDuration = endMinutes - startMinutes;
+            const timelineHeight = totalDuration * scale;
+
+            let html = '<div class="time-header-spacer"></div>';
+            const startHour = Math.floor(startMinutes / 60);
+            const endHour = Math.ceil(endMinutes / 60);
+
+            for (let i = startHour; i <= endHour; i++) {
+                const hour = i;
+                const topPosition = ((hour * 60) - startMinutes) * scale;
+                const displayTime = `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
+
+                if (topPosition >= 0) {
+                    html += `
+                        <span class="time-label" style="top: ${topPosition}px;">${displayTime}</span>
+                    `;
+                }
+            }
+            timeAxis.innerHTML = html;
+            return timeAxis;
+        }
+
+        function createDayChart(dayData, maxBarWidth, dayIndex, globalStartMinutes, globalEndMinutes) {
+            const dayColumn = document.createElement('div');
+            dayColumn.className = 'day-column';
+            dayColumn.dataset.dayIndex = dayIndex;
+
+            const totalDuration = globalEndMinutes - globalStartMinutes;
+            const timelineHeight = totalDuration * scale;
+
+            const eventsHtml = dayData.events.map((event, eventIndex) => {
+                const startTimeMinutes = timeToMinutes(event.start);
+                const topPosition = (startTimeMinutes - globalStartMinutes) * scale;
+                const height = event.duration * scale;
+
+                return `
+                    <div class="event-bar ${event.type}-event"
+                         style="top: ${topPosition}px; height: ${height}px; width: ${maxBarWidth}px;"
+                         data-event-index="${eventIndex}">
+                        <span>${event.name}</span>
+                    </div>
+                `;
+            }).join('');
+
+            dayColumn.innerHTML = `
+                <div class="day-header">
+                    <h2 class="day-title">${dayData.day}</h2>
+                </div>
+                <div class="timeline-container" style="height: ${timelineHeight}px; width: ${maxBarWidth + 40}px;">
+                    ${eventsHtml}
+                </div>
+            `;
+            return dayColumn;
+        }
+
+        function calculateMaxBarWidth(schedule) {
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.visibility = 'hidden';
+            tempDiv.style.whiteSpace = 'nowrap';
+            tempDiv.style.fontFamily = 'Inter, sans-serif';
+            tempDiv.style.fontSize = '0.75rem';
+            tempDiv.style.padding = '0.5rem 0.25rem';
+            document.body.appendChild(tempDiv);
+
+            let maxWidth = 0;
+            schedule.forEach(dayData => {
+                dayData.events.forEach(event => {
+                    tempDiv.textContent = event.name;
+                    const textWidth = tempDiv.getBoundingClientRect().width;
+                    if (textWidth > maxWidth) {
+                        maxWidth = textWidth;
+                    }
+                });
+            });
+            document.body.removeChild(tempDiv);
+            return maxWidth + 10;
+        }
+
+        function renderAllDays() {
+            const scrollY = window.scrollY;
+            const calendarContainer = document.getElementById('calendar-container');
+            calendarContainer.innerHTML = '';
+
+            const { minStartMinutes, maxEndMinutes } = calculateGlobalTimeline();
+            globalStartMinutes = minStartMinutes;
+
+            const timeAxis = createTimeAxis(minStartMinutes, maxEndMinutes);
+            calendarContainer.appendChild(timeAxis);
+
+            const maxBarWidth = calculateMaxBarWidth(schedule);
+
+            schedule.forEach((dayData, dayIndex) => {
+                const chart = createDayChart(dayData, maxBarWidth, dayIndex, minStartMinutes, maxEndMinutes);
+                calendarContainer.appendChild(chart);
+            });
+
+            window.scrollTo(0, scrollY);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderAllDays();
+
+            // Set up toggle event listeners
+            document.getElementById('snapToGridToggle').addEventListener('change', (e) => {
+                snapToGridEnabled = e.target.checked;
+                // If snap to events is enabled, disable it when grid is toggled on
+                if (snapToGridEnabled && snapToEventsEnabled) {
+                    snapToEventsEnabled = false;
+                    document.getElementById('snapToEventsToggle').checked = false;
+                }
+            });
+
+            document.getElementById('snapToEventsToggle').addEventListener('change', (e) => {
+                snapToEventsEnabled = e.target.checked;
+                // If snap to grid is enabled, disable it when events are toggled on
+                if (snapToEventsEnabled && snapToGridEnabled) {
+                    snapToGridEnabled = false;
+                    document.getElementById('snapToGridToggle').checked = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
